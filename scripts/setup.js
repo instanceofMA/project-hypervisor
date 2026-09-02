@@ -81,52 +81,64 @@ if (!zshrcContent.includes("~/.scripts/phv.sh")) {
 }
 console.log("");
 
+const README_URL = 'https://github.com/instanceofMA/project-hypervisor#readme';
+
+const showTroubleshootingPrompt = () => {
+    console.log('────────────────────────────────────────────────────────────');
+    console.log('📖 Need help or prefer manual configuration?');
+    console.log(`   Refer to the complete setup guide in README.md:`);
+    console.log(`   🔗 ${README_URL}`);
+    console.log('────────────────────────────────────────────────────────────\n');
+};
+
 // 5. Check /etc/hosts for home.test
-console.log("⚙️ Step 4: Checking DNS resolution in /etc/hosts...");
-const hostsContent = fs.readFileSync("/etc/hosts", "utf8");
-if (!hostsContent.includes("home.test")) {
-    console.log("⚠️ /etc/hosts is missing home.test entry.");
-    console.log("👉 Please run this one-time command to map local domains:");
-    console.log(
-        "\n   sudo sh -c 'echo \"\\n127.0.0.1 home.test\" >> /etc/hosts'\n",
-    );
+console.log('⚙️ Step 4: Checking DNS resolution in /etc/hosts...');
+const hostsContent = fs.readFileSync('/etc/hosts', 'utf8');
+if (!hostsContent.includes('home.test')) {
+    console.log('⚠️ /etc/hosts is missing home.test entry.');
+    console.log('👉 Please run this one-time command to map local domains:');
+    console.log('\n   sudo sh -c \'echo "\\n127.0.0.1 home.test" >> /etc/hosts\'\n');
+    console.log(`📖 See README.md (Section 3: Component A) for more info: ${README_URL}\n`);
 } else {
-    console.log("✅ /etc/hosts already contains home.test mapping.\n");
+    console.log('✅ /etc/hosts already contains home.test mapping.\n');
 }
 
 // 6. Check Caddy Installation
-console.log("⚙️ Step 5: Checking Caddy Gateway installation...");
+console.log('⚙️ Step 5: Checking Caddy Gateway installation...');
 try {
-    const caddyPath = execSync("which caddy", { encoding: "utf8" }).trim();
+    const caddyPath = execSync('which caddy', { encoding: 'utf8' }).trim();
     console.log(`✅ Caddy binary found: ${caddyPath}\n`);
 } catch {
-    console.log("⚠️ Caddy not found on PATH. To install Caddy:");
-    console.log("   brew install caddy\n");
+    console.log('⚠️ Caddy not found on PATH. To install Caddy:');
+    console.log('   brew install caddy\n');
+    console.log(`📖 See README.md (Section 3: Component B) for full Caddy setup: ${README_URL}\n`);
 }
 
 // 7. Compile Next.js Production Build
-console.log("⚙️ Step 6: Building Next.js Dashboard for Production...");
+console.log('⚙️ Step 6: Building Next.js Dashboard for Production...');
 try {
-    execSync("npm run build", { cwd: projectDir, stdio: "inherit" });
-    console.log("✅ Production build complete.\n");
+    execSync('npm run build', { cwd: projectDir, stdio: 'inherit' });
+    console.log('✅ Production build complete.\n');
 } catch (err) {
-    console.error("❌ Build failed:", err.message);
+    console.error('\n❌ Build failed:', err.message);
+    showTroubleshootingPrompt();
     process.exit(1);
 }
 
 // 8. Register and Start LaunchAgent Daemon
-console.log("⚙️ Step 7: Registering and Starting LaunchAgent Daemon...");
+console.log('⚙️ Step 7: Registering and Starting LaunchAgent Daemon...');
 try {
-    execSync("node scripts/daemon.js install", {
+    execSync('node scripts/daemon.js install', {
         cwd: projectDir,
-        stdio: "inherit",
+        stdio: 'inherit',
     });
     console.log(
-        "\n🎉 Setup Complete! Your Project Hypervisor is live at https://home.test",
+        '\n🎉 Setup Complete! Your Project Hypervisor is live at https://home.test',
     );
     console.log(
-        "👉 To enable the `phv` command in your current terminal session, run: source ~/.zshrc\n",
+        '👉 To enable the `phv` command in your current terminal session, run: source ~/.zshrc\n',
     );
 } catch (err) {
-    console.error("❌ Daemon registration failed:", err.message);
+    console.error('\n❌ Daemon registration failed:', err.message);
+    showTroubleshootingPrompt();
 }

@@ -117,6 +117,7 @@ const actions = {
             console.log(`🔄 Service live: https://home.test`);
         } catch (err) {
             console.error(`❌ Launchctl error:`, err.message);
+            console.log(`📖 Refer to README.md (Section 4) for manual setup: https://github.com/instanceofMA/project-hypervisor#readme\n`);
         }
     },
 

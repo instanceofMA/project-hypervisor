@@ -8,11 +8,11 @@ A senior-level architectural blueprint for setting up a 100% portless, zero-main
 
 Standard frontend/full-stack development workflows rely heavily on raw network configurations, specifically hitting local addresses like `http://localhost:3000`, `http://localhost:3001`, and so on. While this works out of the box, it introduces structural problems for complex web engineering:
 
-*   **Authentication & Cookie Inconsistencies:** Modern authentication suites (NextAuth.js/Auth.js, OAuth platforms, Clerk, Auth0) handle tracking sessions via strict state cookies. Browsers manage `http://localhost` as a special edge case but restrict cookies flagged with `Secure`, `HttpOnly`, or advanced `SameSite` properties unless they run over strict HTTPS subdomains.
-*   **Cross-Origin Resource Sharing (CORS) Disconnects:** Juggling a modern microservice mesh or separating your frontend repo from backend nodes across arbitrary port boundaries triggers Cross-Origin Resource Sharing (CORS) security blocks. Mirroring true multi-subdomain pathways isolates origin targets completely.
-*   **Missing Production Parity:** Production systems operate over strict HTTPS with DNS subdomains. Development over `localhost:PORT` hides architectural edge cases, missing header overrides, and middleware routing gaps until the moment code is merged and pushed to your production infrastructure.
-*   **Mental Overhead & Resource Collisions:** Forgetting which port you assigned to an older side project three months ago can lead to port collision crashes (`EADDRINUSE`) if you run multiple servers simultaneously.
-*   **Next.js CLI Port Type Validation:** Next.js's command-line interface (`next dev` and `next start`) strictly validates the `PORT` environment variable. If it detects a text string path instead of a numeric integer, the CLI crashes instantly.
+- **Authentication & Cookie Inconsistencies:** Modern authentication suites (NextAuth.js/Auth.js, OAuth platforms, Clerk, Auth0) handle tracking sessions via strict state cookies. Browsers manage `http://localhost` as a special edge case but restrict cookies flagged with `Secure`, `HttpOnly`, or advanced `SameSite` properties unless they run over strict HTTPS subdomains.
+- **Cross-Origin Resource Sharing (CORS) Disconnects:** Juggling a modern microservice mesh or separating your frontend repo from backend nodes across arbitrary port boundaries triggers Cross-Origin Resource Sharing (CORS) security blocks. Mirroring true multi-subdomain pathways isolates origin targets completely.
+- **Missing Production Parity:** Production systems operate over strict HTTPS with DNS subdomains. Development over `localhost:PORT` hides architectural edge cases, missing header overrides, and middleware routing gaps until the moment code is merged and pushed to your production infrastructure.
+- **Mental Overhead & Resource Collisions:** Forgetting which port you assigned to an older side project three months ago can lead to port collision crashes (`EADDRINUSE`) if you run multiple servers simultaneously.
+- **Next.js CLI Port Type Validation:** Next.js's command-line interface (`next dev` and `next start`) strictly validates the `PORT` environment variable. If it detects a text string path instead of a numeric integer, the CLI crashes instantly.
 
 ### The Solution: Programmatic Unix Domain Sockets (UDS)
 
@@ -22,7 +22,43 @@ To bypass Next.js's strict CLI limitation cleanly, we utilize Next.js's official
 
 ---
 
-## 2. Infrastructure Installation & Clean Machine Configuration
+## ⚡ Quickstart: 1-Command Automated Setup
+
+For a new machine, clone this repository and run the master installer:
+
+```bash
+git clone https://github.com/instanceofMA/project-hypervisor.git
+cd project-hypervisor
+npm install
+npm run setup
+```
+
+The master setup script automatically:
+1. Validates and prepares `~/.sockets/` with correct permissions (`0755`).
+2. Deploys the `phv` CLI to `~/.scripts/phv.sh` and sources it inside `~/.zshrc`.
+3. Verifies local DNS (`home.test`) and Caddy gateway status.
+4. Compiles the production build and registers the background **LaunchAgent daemon** at `https://home.test`.
+
+---
+
+## 🛠️ Managing the Background Service (Daemon)
+
+Control the background Dashboard server with these `npm` commands:
+
+| Command | Description |
+| :--- | :--- |
+| `npm run service:start` | Boots the `com.project-hypervisor` LaunchAgent |
+| `npm run service:stop` | Halts the background service |
+| `npm run service:restart` | Hot-restarts the service daemon |
+| `npm run service:status` | Shows the active PID and execution health |
+| `npm run service:install` | Dynamically writes `~/Library/LaunchAgents/com.project-hypervisor.plist` and registers it |
+| `npm run service:uninstall` | Stops the service and removes the LaunchAgent `.plist` |
+
+---
+
+## 📖 Manual Step-by-Step Setup (Fallback & Architecture Reference)
+
+If you prefer to configure everything manually or need to troubleshoot specific components, follow the step-by-step sections below:
 
 To reproduce this system from scratch on a clean machine, execute these installation commands:
 
@@ -133,41 +169,49 @@ nano ~/.scripts/hypervisor.js
 Paste this declarative JavaScript architecture:
 
 ```javascript
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
-const url = require('url');
+const { execSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const http = require("http");
+const url = require("url");
 
 const resolvePreScripts = (cmdString) =>
     cmdString
-        .split('&&')
-        .map(segment => segment.trim())
-        .filter(segment => segment && !segment.startsWith('next '));
+        .split("&&")
+        .map((segment) => segment.trim())
+        .filter((segment) => segment && !segment.startsWith("next "));
 
 const normalizeCommand = (scriptText) =>
-    scriptText.startsWith('npm ') || scriptText.startsWith('npx ') 
-        ? scriptText 
-        : `npm run ${scriptText.split(' ')}`;
+    scriptText.startsWith("npm ") || scriptText.startsWith("npx ")
+        ? scriptText
+        : `npm run ${scriptText.split(" ")}`;
 
 const initializeNextServer = async (socketPath) => {
     try {
-        const nextModulePath = require.resolve('next', { paths: [process.cwd()] });
+        const nextModulePath = require.resolve("next", {
+            paths: [process.cwd()],
+        });
         const next = require(nextModulePath);
         const app = next({ dev: true, dir: process.cwd() });
         const handle = app.getRequestHandler();
-        
+
         await app.prepare();
-        
+
         if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
 
-        http.createServer((req, res) => handle(req, res, url.parse(req.url, true)))
-            .listen(socketPath, () => {
-                fs.chmodSync(socketPath, '0666'); // Critical permission step for Caddy access
-                console.log(`▲ Next.js Local Gateway Server ready and readable on socket: ${socketPath}`);
-            });
+        http.createServer((req, res) =>
+            handle(req, res, url.parse(req.url, true)),
+        ).listen(socketPath, () => {
+            fs.chmodSync(socketPath, "0666"); // Critical permission step for Caddy access
+            console.log(
+                `▲ Next.js Local Gateway Server ready and readable on socket: ${socketPath}`,
+            );
+        });
     } catch (error) {
-        console.error('❌ Next.js Programmatic API Initialization Failed:', error.message);
+        console.error(
+            "❌ Next.js Programmatic API Initialization Failed:",
+            error.message,
+        );
         process.exit(1);
     }
 };
@@ -175,30 +219,38 @@ const initializeNextServer = async (socketPath) => {
 const orchestrateDevelopmentMatrix = async () => {
     const socketPath = process.env.PORT;
     if (!socketPath) {
-        console.error("❌ Error: PORT environment variable tracking a socket file is missing.");
+        console.error(
+            "❌ Error: PORT environment variable tracking a socket file is missing.",
+        );
         process.exit(1);
     }
 
-    const pkgPath = path.join(process.cwd(), 'package.json');
+    const pkgPath = path.join(process.cwd(), "package.json");
     if (!fs.existsSync(pkgPath)) {
-        console.log('⚠️ No package.json detected. Spawning raw fallback engine layers...');
+        console.log(
+            "⚠️ No package.json detected. Spawning raw fallback engine layers...",
+        );
         return initializeNextServer(socketPath);
     }
 
     let pkg = {};
     try {
-        pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     } catch (err) {
-        console.error('⚠️ Could not parse package.json:', err.message);
+        console.error("⚠️ Could not parse package.json:", err.message);
     }
 
-    const devCommand = pkg.scripts?.dev || '';
-    
+    const devCommand = pkg.scripts?.dev || "";
+
     resolvePreScripts(devCommand)
         .map(normalizeCommand)
-        .forEach(cmd => {
+        .forEach((cmd) => {
             console.log(`📦 Executing pipeline task: ${cmd}`);
-            try { execSync(cmd, { stdio: 'inherit' }); } catch { process.exit(1); }
+            try {
+                execSync(cmd, { stdio: "inherit" });
+            } catch {
+                process.exit(1);
+            }
         });
 
     return initializeNextServer(socketPath);
@@ -480,38 +532,38 @@ chmod +a "user:root allow list,add_file,add_subdirectory,search,read,write,delet
 
 ### 🧠 Incident 1: The Volatile Filesystem Trap
 
-*   **Symptom:** Sockets initially mapped to `/tmp/` would drop connection vectors or crash after 3 days of repository inactivity.
-*   **Root Cause:** macOS executes automated script sweeps inside `/tmp/`, purging files that haven't been modified within a rolling 72-hour window. Additionally, Caddy (running as root) ran into App Sandboxing boundaries when trying to access user-owned files inside `/tmp/`.
-*   **Resolution:** Moved the socket folder into user space at `~/.sockets/`. This keeps it safe from automatic file cleanup routines, and explicit access parameters can be cleanly maintained using standard filesystem permissions.
+- **Symptom:** Sockets initially mapped to `/tmp/` would drop connection vectors or crash after 3 days of repository inactivity.
+- **Root Cause:** macOS executes automated script sweeps inside `/tmp/`, purging files that haven't been modified within a rolling 72-hour window. Additionally, Caddy (running as root) ran into App Sandboxing boundaries when trying to access user-owned files inside `/tmp/`.
+- **Resolution:** Moved the socket folder into user space at `~/.sockets/`. This keeps it safe from automatic file cleanup routines, and explicit access parameters can be cleanly maintained using standard filesystem permissions.
 
 ### 🧠 Incident 2: The Let's Encrypt Identity Rejection (`ERR_SSL_PROTOCOL_ERROR`)
 
-*   **Symptom:** Accessing `https://home.test` returned an invalid security handshake notification.
-*   **Root Cause:** Caddy default settings automatically try to fetch real public SSL certs from Let's Encrypt. Let's Encrypt returns an explicit HTTP 400 error when requested to sign private top-level domains like `.test`.
-*   **Resolution:** Modified the `.Caddyfile` to use the global `local_certs` instruction block alongside explicit `tls internal` directives for every site. This switches Caddy to its built-in local cryptographic certificate signing engine, completely offline.
+- **Symptom:** Accessing `https://home.test` returned an invalid security handshake notification.
+- **Root Cause:** Caddy default settings automatically try to fetch real public SSL certs from Let's Encrypt. Let's Encrypt returns an explicit HTTP 400 error when requested to sign private top-level domains like `.test`.
+- **Resolution:** Modified the `.Caddyfile` to use the global `local_certs` instruction block alongside explicit `tls internal` directives for every site. This switches Caddy to its built-in local cryptographic certificate signing engine, completely offline.
 
 ### 🧠 Incident 3: The Ghost NVM Pipeline Lock
 
-*   **Symptom:** Next.js threw an immediate `HTTP 502 Bad Gateway` error when managed via background processes.
-*   **Root Cause:** The `launchd` service was configured to call generic Node binaries, but the system environment was running inside an isolated NVM folder path (`~/.nvm/versions/...`). Moving or updating Node versions broke the binary targets, causing the system execution loops to fail silently.
-*   **Resolution:** Cleaned up brittle symlinks, installed a dedicated system-wide Node engine via Homebrew, and recompiled the dashboard app dependencies using this stable global runtime environment.
+- **Symptom:** Next.js threw an immediate `HTTP 502 Bad Gateway` error when managed via background processes.
+- **Root Cause:** The `launchd` service was configured to call generic Node binaries, but the system environment was running inside an isolated NVM folder path (`~/.nvm/versions/...`). Moving or updating Node versions broke the binary targets, causing the system execution loops to fail silently.
+- **Resolution:** Cleaned up brittle symlinks, installed a dedicated system-wide Node engine via Homebrew, and recompiled the dashboard app dependencies using this stable global runtime environment.
 
 ### 🧠 Incident 4: The Next.js Production Type Constraint
 
-*   **Symptom:** The system error log (`err.log`) repeatedly threw a warning stating: `value from env PORT is invalid... not a non-negative number`.
-*   **Root Cause:** While Next.js accepts a string-based socket path in development mode (`next dev`), its production server utility requirements (`next start`) enforce a strict type restriction that forces port entries to resolve strictly as numeric integers.
-*   **Resolution:** Created a custom `server.js` startup script that programmatically instantiates the core HTTP connection pools, completely bypassing Next.js's internal CLI command-line port type validations.
+- **Symptom:** The system error log (`err.log`) repeatedly threw a warning stating: `value from env PORT is invalid... not a non-negative number`.
+- **Root Cause:** While Next.js accepts a string-based socket path in development mode (`next dev`), its production server utility requirements (`next start`) enforce a strict type restriction that forces port entries to resolve strictly as numeric integers.
+- **Resolution:** Created a custom `server.js` startup script that programmatically instantiates the core HTTP connection pools, completely bypassing Next.js's internal CLI command-line port type validations.
 
 ### 🧠 Incident 5: The Turbopack CLI Lock
 
-*   **Symptom:** Next.js 15 apps booted via the `--turbopack` flag ignored the `PORT` filesystem variable entirely, fallback routing straight back to network `localhost:3000` and triggering a 502 Bad Gateway.
-*   **Resolution:** Dropped the `--turbopack` flag during proxy boots. By using the Next.js Programmatic API, compilation shifts seamlessly to the highly compatible Webpack compiler framework natively.
+- **Symptom:** Next.js 15 apps booted via the `--turbopack` flag ignored the `PORT` filesystem variable entirely, fallback routing straight back to network `localhost:3000` and triggering a 502 Bad Gateway.
+- **Resolution:** Dropped the `--turbopack` flag during proxy boots. By using the Next.js Programmatic API, compilation shifts seamlessly to the highly compatible Webpack compiler framework natively.
 
 ### 🧠 Incident 6: The Subshell Truncation Gap (Exit Code 127)
 
-*   **Symptom:** Evaluating chained commands via `exec sh` caused the terminal pane to crash instantly with a command not found warning.
-*   **Root Cause:** Subshell calls drop out of your rich Zsh shell environment, losing access to NVM Node binary paths.
-*   **Resolution:** Replaced subshell calls with native Zsh `export` and `eval` pipelines, appending `./node_modules/.bin` to the local path strings on the fly so binaries resolve flawlessly.
+- **Symptom:** Evaluating chained commands via `exec sh` caused the terminal pane to crash instantly with a command not found warning.
+- **Root Cause:** Subshell calls drop out of your rich Zsh shell environment, losing access to NVM Node binary paths.
+- **Resolution:** Replaced subshell calls with native Zsh `export` and `eval` pipelines, appending `./node_modules/.bin` to the local path strings on the fly so binaries resolve flawlessly.
 
 ---
 
@@ -543,6 +595,6 @@ When you create a brand-new application repository down the line, follow these s
     ```bash
     phv dev
     ```
-    *(Alternatively, you can still use the `dev-domain` alias or start your development server directly).*
+    _(Alternatively, you can still use the `dev-domain` alias or start your development server directly)._
 
 Open your browser and navigate straight to `https://new-project.test`. Your new app will immediately resolve securely over an encrypted, portless connection, and its status card on your master `https://home.test` dashboard will instantly flash **Online**.
