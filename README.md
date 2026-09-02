@@ -135,6 +135,7 @@ Paste this declarative JavaScript architecture:
 ```javascript
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const url = require('url');
 
@@ -151,7 +152,8 @@ const normalizeCommand = (scriptText) =>
 
 const initializeNextServer = async (socketPath) => {
     try {
-        const next = require('next');
+        const nextModulePath = require.resolve('next', { paths: [process.cwd()] });
+        const next = require(nextModulePath);
         const app = next({ dev: true, dir: process.cwd() });
         const handle = app.getRequestHandler();
         
@@ -177,13 +179,19 @@ const orchestrateDevelopmentMatrix = async () => {
         process.exit(1);
     }
 
-    const hasPackageJson = fs.existsSync('./package.json');
-    if (!hasPackageJson) {
+    const pkgPath = path.join(process.cwd(), 'package.json');
+    if (!fs.existsSync(pkgPath)) {
         console.log('⚠️ No package.json detected. Spawning raw fallback engine layers...');
         return initializeNextServer(socketPath);
     }
 
-    const pkg = require('./package.json');
+    let pkg = {};
+    try {
+        pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    } catch (err) {
+        console.error('⚠️ Could not parse package.json:', err.message);
+    }
+
     const devCommand = pkg.scripts?.dev || '';
     
     resolvePreScripts(devCommand)
