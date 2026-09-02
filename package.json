@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup": "node scripts/setup.js",
+    "service:install": "node scripts/daemon.js install",
+    "service:start": "node scripts/daemon.js start",
+    "service:stop": "node scripts/daemon.js stop",
+    "service:restart": "node scripts/daemon.js restart",
+    "service:status": "node scripts/daemon.js status",
+    "service:uninstall": "node scripts/daemon.js uninstall"
   },
   "dependencies": {
     "lucide-react": "^1.39.0",
